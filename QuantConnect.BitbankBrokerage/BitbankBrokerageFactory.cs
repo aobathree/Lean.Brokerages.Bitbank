@@ -48,8 +48,20 @@ namespace QuantConnect.Brokerages.Bitbank
             { "bitbank-api-secret", GetCredential("bitbank-api-secret", "BITBANK_API_SECRET") },
             { "bitbank-rest-url", Config.Get("bitbank-rest-url", "https://api.bitbank.cc") },
             { "bitbank-public-url", Config.Get("bitbank-public-url", "https://public.bitbank.cc") },
-            { "bitbank-websocket-url", Config.Get("bitbank-websocket-url", "wss://stream.bitbank.cc") }
+            { "bitbank-websocket-url", Config.Get("bitbank-websocket-url", "wss://stream.bitbank.cc") },
+            { "bitbank-account-type", Config.Get("bitbank-account-type", "cash") }
         };
+
+        /// <summary>
+        /// Parses the "bitbank-account-type" config value: "margin" enables margin trading,
+        /// anything else (default "cash") is spot
+        /// </summary>
+        public static AccountType ParseAccountType(string accountType)
+        {
+            return "margin".Equals(accountType?.Trim(), StringComparison.OrdinalIgnoreCase)
+                ? AccountType.Margin
+                : AccountType.Cash;
+        }
 
         /// <summary>
         /// Reads a credential from configuration, falling back to an environment variable
@@ -69,7 +81,7 @@ namespace QuantConnect.Brokerages.Bitbank
         /// </summary>
         public override IBrokerageModel GetBrokerageModel(IOrderProvider orderProvider)
         {
-            return new BitbankBrokerageModel();
+            return new BitbankBrokerageModel(ParseAccountType(Config.Get("bitbank-account-type", "cash")));
         }
 
         /// <summary>
@@ -83,6 +95,9 @@ namespace QuantConnect.Brokerages.Bitbank
             var restUrl = Read<string>(job.BrokerageData, "bitbank-rest-url", errors);
             var publicUrl = Read<string>(job.BrokerageData, "bitbank-public-url", errors);
             var webSocketUrl = Read<string>(job.BrokerageData, "bitbank-websocket-url", errors);
+            var accountType = ParseAccountType(
+                job.BrokerageData.TryGetValue("bitbank-account-type", out var accountTypeValue)
+                    ? accountTypeValue : Config.Get("bitbank-account-type", "cash"));
 
             if (errors.Count != 0)
             {
@@ -94,7 +109,7 @@ namespace QuantConnect.Brokerages.Bitbank
                     Config.Get("data-aggregator", "QuantConnect.Lean.Engine.DataFeeds.AggregationManager"), false);
 
             var brokerage = new BitbankBrokerage(apiKey, apiSecret, restUrl, publicUrl, webSocketUrl,
-                algorithm?.Transactions, aggregator);
+                algorithm?.Transactions, aggregator, accountType);
             Composer.Instance.AddPart<IDataQueueHandler>(brokerage);
             return brokerage;
         }

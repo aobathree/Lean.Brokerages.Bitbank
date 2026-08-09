@@ -32,9 +32,10 @@ using QuantConnect.Util;
 namespace QuantConnect.Brokerages.Bitbank
 {
     /// <summary>
-    /// bitbank (bitbank.cc) brokerage implementation: spot trading on JPY-quoted pairs.
+    /// bitbank (bitbank.cc) brokerage implementation: spot and margin trading on JPY-quoted pairs.
     /// Orders and balances use the private REST API, order/fill events arrive over the
     /// PubNub private stream, and market data over the Socket.IO public stream.
+    /// Margin trading (2x leverage, long/short) is enabled via config "bitbank-account-type": "margin".
     /// </summary>
     [BrokerageFactory(typeof(BitbankBrokerageFactory))]
     public partial class BitbankBrokerage : Brokerage, IDataQueueHandler
@@ -52,6 +53,10 @@ namespace QuantConnect.Brokerages.Bitbank
         private readonly ConcurrentDictionary<long, decimal> _fills = new();
         // bitbank order ids for which a terminal order event (Filled/Canceled/Invalid) was already emitted
         private readonly ConcurrentDictionary<long, byte> _closedOrders = new();
+
+        // true when the account trades on margin: orders carry position_side and
+        // holdings come from /v1/user/margin/positions
+        private bool _marginTrading;
 
         private bool _isInitialized;
 
@@ -72,15 +77,17 @@ namespace QuantConnect.Brokerages.Bitbank
         /// <param name="webSocketUrl">Public stream host, e.g. wss://stream.bitbank.cc</param>
         /// <param name="orderProvider">Lean order provider used to resolve orders by brokerage id</param>
         /// <param name="aggregator">Data aggregator for live ticks</param>
+        /// <param name="accountType">Cash for spot trading (default), Margin for margin trading</param>
         public BitbankBrokerage(string apiKey, string apiSecret, string restUrl, string publicUrl,
-            string webSocketUrl, IOrderProvider orderProvider, IDataAggregator aggregator)
+            string webSocketUrl, IOrderProvider orderProvider, IDataAggregator aggregator,
+            AccountType accountType = AccountType.Cash)
             : base("Bitbank")
         {
-            Initialize(apiKey, apiSecret, restUrl, publicUrl, webSocketUrl, orderProvider, aggregator);
+            Initialize(apiKey, apiSecret, restUrl, publicUrl, webSocketUrl, orderProvider, aggregator, accountType);
         }
 
         private void Initialize(string apiKey, string apiSecret, string restUrl, string publicUrl,
-            string webSocketUrl, IOrderProvider orderProvider, IDataAggregator aggregator)
+            string webSocketUrl, IOrderProvider orderProvider, IDataAggregator aggregator, AccountType accountType)
         {
             if (_isInitialized)
             {
@@ -88,6 +95,7 @@ namespace QuantConnect.Brokerages.Bitbank
             }
 
             AccountBaseCurrency = Currencies.JPY;
+            _marginTrading = accountType == AccountType.Margin;
 
             _restApiClient = new BitbankRestApiClient(apiKey, apiSecret, restUrl, publicUrl);
             _orderProvider = orderProvider;
@@ -271,11 +279,51 @@ namespace QuantConnect.Brokerages.Bitbank
         }
 
         /// <summary>
-        /// bitbank is a spot cash account: holdings are represented as cash balances
+        /// Cash account: holdings are represented as cash balances, returns an empty list.
+        /// Margin account: open positions from GET /v1/user/margin/positions, netted per pair
+        /// (Lean holdings are net per symbol; simultaneous long and short books are combined).
         /// </summary>
         public override List<Holding> GetAccountHoldings()
         {
-            return new List<Holding>();
+            if (!_marginTrading)
+            {
+                return new List<Holding>();
+            }
+
+            var holdings = new Dictionary<Symbol, Holding>();
+            foreach (var position in _restApiClient.GetMarginPositions())
+            {
+                Symbol symbol;
+                try
+                {
+                    symbol = _symbolMapper.GetLeanSymbol(position.Pair, SecurityType.Crypto, BitbankMarket.Name);
+                }
+                catch (Exception)
+                {
+                    Log.Trace($"BitbankBrokerage.GetAccountHoldings(): skipping position for unknown pair {position.Pair}");
+                    continue;
+                }
+
+                var quantity = position.PositionSide == "short" ? -position.OpenAmount : position.OpenAmount;
+                if (holdings.TryGetValue(symbol, out var existing))
+                {
+                    OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Warning, "HedgedMarginPosition",
+                        $"Both long and short margin positions are open for {position.Pair}; " +
+                        "they are netted into a single Lean holding."));
+                    existing.Quantity += quantity;
+                }
+                else
+                {
+                    holdings[symbol] = new Holding
+                    {
+                        Symbol = symbol,
+                        Quantity = quantity,
+                        AveragePrice = position.AveragePrice,
+                        CurrencySymbol = Currencies.GetCurrencySymbol(Currencies.JPY)
+                    };
+                }
+            }
+            return holdings.Values.Where(holding => holding.Quantity != 0).ToList();
         }
 
         /// <summary>
@@ -345,7 +393,71 @@ namespace QuantConnect.Brokerages.Bitbank
                 throw new NotSupportedException("BitbankBrokerage: only GoodTilCanceled time in force is supported.");
             }
 
+            var explicitPositionSide = (order.Properties as BitbankOrderProperties)?.PositionSide;
+            if (_marginTrading)
+            {
+                request.PositionSide = explicitPositionSide.HasValue
+                    ? (explicitPositionSide.Value == BitbankPositionSide.Short ? "short" : "long")
+                    : ResolvePositionSide(order.Direction, request.Pair, order.AbsoluteQuantity);
+            }
+            else if (explicitPositionSide.HasValue)
+            {
+                throw new NotSupportedException(
+                    "BitbankBrokerage: PositionSide requires the margin account type (config \"bitbank-account-type\": \"margin\").");
+            }
+
             return request;
+        }
+
+        /// <summary>
+        /// Derives position_side from the currently open margin positions for the pair
+        /// </summary>
+        private string ResolvePositionSide(OrderDirection direction, string pair, decimal quantity)
+        {
+            decimal openLong = 0, openShort = 0;
+            foreach (var position in _restApiClient.GetMarginPositions())
+            {
+                if (position.Pair != pair)
+                {
+                    continue;
+                }
+                if (position.PositionSide == "short")
+                {
+                    openShort += position.OpenAmount;
+                }
+                else
+                {
+                    openLong += position.OpenAmount;
+                }
+            }
+            return DerivePositionSide(direction, openLong, openShort, quantity);
+        }
+
+        /// <summary>
+        /// Margin position_side rule: an order first closes an opposing open position
+        /// (buy closes short, sell closes long), otherwise it opens a new position.
+        /// A single bitbank order cannot close one book and open the other, so quantities
+        /// exceeding the opposing open amount are rejected: split the order or set
+        /// <see cref="BitbankOrderProperties.PositionSide"/> explicitly.
+        /// </summary>
+        public static string DerivePositionSide(OrderDirection direction, decimal openLong, decimal openShort, decimal quantity)
+        {
+            var closableAmount = direction == OrderDirection.Buy ? openShort : openLong;
+            var closingSide = direction == OrderDirection.Buy ? "short" : "long";
+            var openingSide = direction == OrderDirection.Buy ? "long" : "short";
+
+            if (closableAmount == 0)
+            {
+                return openingSide;
+            }
+            if (quantity <= closableAmount)
+            {
+                return closingSide;
+            }
+            throw new NotSupportedException(
+                $"BitbankBrokerage: order quantity {quantity.ToStringInvariant()} exceeds the open {closingSide} position " +
+                $"{closableAmount.ToStringInvariant()}. bitbank cannot close one position side and open the other in a single order: " +
+                "split the order, or set BitbankOrderProperties.PositionSide explicitly.");
         }
 
         /// <summary>
@@ -361,20 +473,30 @@ namespace QuantConnect.Brokerages.Bitbank
             }
             var time = QuantConnect.Time.UnixMillisecondTimeStampToDateTime(bitbankOrder.OrderedAt);
 
+            // margin orders carry their position book so re-submission after restart targets the same book
+            BitbankOrderProperties properties = null;
+            if (!string.IsNullOrEmpty(bitbankOrder.PositionSide))
+            {
+                properties = new BitbankOrderProperties
+                {
+                    PositionSide = bitbankOrder.PositionSide == "short" ? BitbankPositionSide.Short : BitbankPositionSide.Long
+                };
+            }
+
             Order order;
             switch (bitbankOrder.Type)
             {
                 case "market":
-                    order = new MarketOrder(symbol, quantity, time);
+                    order = new MarketOrder(symbol, quantity, time, properties: properties);
                     break;
                 case "limit":
-                    order = new LimitOrder(symbol, quantity, bitbankOrder.Price ?? 0, time);
+                    order = new LimitOrder(symbol, quantity, bitbankOrder.Price ?? 0, time, properties: properties);
                     break;
                 case "stop":
-                    order = new StopMarketOrder(symbol, quantity, bitbankOrder.TriggerPrice ?? 0, time);
+                    order = new StopMarketOrder(symbol, quantity, bitbankOrder.TriggerPrice ?? 0, time, properties: properties);
                     break;
                 case "stop_limit":
-                    order = new StopLimitOrder(symbol, quantity, bitbankOrder.TriggerPrice ?? 0, bitbankOrder.Price ?? 0, time);
+                    order = new StopLimitOrder(symbol, quantity, bitbankOrder.TriggerPrice ?? 0, bitbankOrder.Price ?? 0, time, properties: properties);
                     break;
                 default:
                     return null;

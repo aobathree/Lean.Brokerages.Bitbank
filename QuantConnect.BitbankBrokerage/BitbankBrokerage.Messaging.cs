@@ -62,6 +62,23 @@ namespace QuantConnect.Brokerages.Bitbank
                     case "asset_update":
                         // balances are re-synced by Lean's periodic cash sync
                         break;
+
+                    case "margin_position_update":
+                        // fills already update the Lean portfolio; positions re-sync via GetAccountHoldings
+                        Log.Trace($"BitbankBrokerage: margin position update: {message["params"]}");
+                        break;
+
+                    case "margin_payable_update":
+                        // debt (payables) incurred, e.g. after losscut: surface it, requires manual deposit
+                        OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Warning, "MarginPayableUpdate",
+                            $"bitbank margin payable update (possible debt): {message["params"]}"));
+                        break;
+
+                    case "margin_notice_update":
+                        // margin call / losscut / settlement notice
+                        OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Warning, "MarginNoticeUpdate",
+                            $"bitbank margin notice (margin call / losscut / settlement): {message["params"]}"));
+                        break;
                 }
             }
             catch (Exception e)
@@ -135,8 +152,16 @@ namespace QuantConnect.Brokerages.Bitbank
             }
 
             var fillQuantity = trade.Side == "buy" ? trade.Amount : -trade.Amount;
-            OnOrderEvent(new OrderEvent(order, GetTime(trade.ExecutedAt), fee,
-                $"Bitbank Order Event: {trade.MakerTaker}")
+            var message = $"Bitbank Order Event: {trade.MakerTaker}";
+            if (!string.IsNullOrEmpty(trade.PositionSide))
+            {
+                message += $", position: {trade.PositionSide}";
+                if (trade.ProfitLoss.HasValue)
+                {
+                    message += $", realized PnL: {trade.ProfitLoss.Value.ToStringInvariant()} JPY";
+                }
+            }
+            OnOrderEvent(new OrderEvent(order, GetTime(trade.ExecutedAt), fee, message)
             {
                 Status = status,
                 FillPrice = trade.Price,

@@ -59,7 +59,10 @@ namespace QuantConnect.Brokerages.Bitbank
                 job.BrokerageData.TryGetValue("bitbank-public-url", out var publicUrl) ? publicUrl : Config.Get("bitbank-public-url", "https://public.bitbank.cc"),
                 job.BrokerageData.TryGetValue("bitbank-websocket-url", out var wsUrl) ? wsUrl : Config.Get("bitbank-websocket-url", "wss://stream.bitbank.cc"),
                 _orderProvider,
-                aggregator);
+                aggregator,
+                BitbankBrokerageFactory.ParseAccountType(
+                    job.BrokerageData.TryGetValue("bitbank-account-type", out var accountType) && !string.IsNullOrEmpty(accountType)
+                        ? accountType : Config.Get("bitbank-account-type", "cash")));
 
             if (!IsConnected)
             {

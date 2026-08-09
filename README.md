@@ -7,6 +7,7 @@ LEAN 本体の改変・再ビルドは不要。公式 NuGet パッケージ / �
 ## 機能
 
 - **ライブトレーディング**: 現物(spot)の成行・指値・逆指値注文、post_only、残高同期、JPY 口座通貨
+- **信用取引(margin)**: ロング/ショート両建玉、最大レバレッジ 2 倍、建玉同期、position_side の自動判定([下記](#信用取引margin))
 - **ライブデータフィード**: ティッカー・約定・板(depth)のリアルタイム購読(`IDataQueueHandler`)
 - **ヒストリカルデータ**: ローソク足 API 経由の履歴取得(1min / 1hour / 1day)
 - **対応ペア**: 公式サイト掲載の JPY 建て 44 ペア
@@ -109,6 +110,34 @@ C# も同様に `SetBrokerageModel(new BitbankBrokerageModel())`(`using QuantCon
 - post_only 指値は `BitbankOrderProperties { PostOnly = true }` を注文プロパティに指定
 - 注文の amend は不可(bitbank API 仕様)。cancel + 再発注してください
 
+## 信用取引(margin)
+
+bitbank の信用取引(最大レバレッジ 2 倍、ロング/ショート)に対応しています。
+
+```python
+class MyMarginAlgorithm(QCAlgorithm):
+    def initialize(self):
+        self.set_account_currency("JPY")
+        self.set_cash(1_000_000)
+        self.set_brokerage_model(BitbankBrokerageModel(AccountType.MARGIN))  # レバレッジ 2 倍・ショート可
+        self.btc = self.add_crypto("BTCJPY", Resolution.DAILY, "bitbank").symbol
+
+    def on_data(self, data):
+        if not self.portfolio.invested:
+            self.set_holdings(self.btc, -0.5)  # ショート建て
+```
+
+ライブでは config(または環境変数経由の `BrokerageData`)に **`"bitbank-account-type": "margin"`** を追加してください(既定は `"cash"` = 現物)。
+
+- **position_side の自動判定**: bitbank の信用注文は建玉サイド(`position_side`)必須ですが、コネクターが自動判定します — 反対側の建玉があれば決済(買い=ショート決済、売り=ロング決済)、無ければ新規建て
+- **明示指定**: `BitbankOrderProperties { PositionSide = BitbankPositionSide.Short }` で強制できます(例: ロング建玉を残したままショートを新規建て)
+- **ドテン(決済+新規を 1 注文)は不可**: bitbank API の制約により、反対建玉の量を超える注文は拒否されます。2 注文に分割するか `PositionSide` を明示してください
+- 建玉は `GetAccountHoldings()`(`GET /v1/user/margin/positions`)として LEAN に同期されます
+- マージンコール / ロスカット / 追証の通知はプライベートストリーム(`margin_notice_update` 等)経由で警告メッセージとして届きます
+- **建玉金利 0.04%/日**(日本時間 0 時徴収)はバックテストの `BitbankFeeModel` ではモデル化されません(ライブでは現金同期で反映)
+- **手数料の徴収タイミング**(2026-08-09 実機確認): 新規建て約定の手数料は 0 で建玉の `unrealized_fee` に繰り延べられ、決済約定時に新規+決済分がまとめて徴収されます(決済 fill の手数料に合算)。約定イベントの `profit_loss` は手数料・金利控除後の実現損益です
+- 信用取引には bitbank 側の**利用審査**の完了が必要です(未完了はエラー 50058)
+
 ## ライブトレーディング
 
 config.json の `environments` に追加:
@@ -136,17 +165,18 @@ API キーは環境変数 `BITBANK_API_KEY` / `BITBANK_API_SECRET` で注入し�
 | `AssetsCheck` | 認証・残高・アクティブ注文の取得 | なし |
 | `StreamCheck` | プライベートストリーム(PubNub)購読テスト | なし |
 | `OrderSmokeTest` | 最小ロット指値の発注→取消ライフサイクル(`--yes` 必須) | **あり**(約定しない価格) |
+| `MarginSmokeTest` | 信用取引: position_side 付き発注→取消 + 最小ロットのロング新規建て→建玉確認→決済(`--yes` 必須、`--cancel-only` で建玉なし) | **あり**(往復で数円〜数十円のコスト) |
 | `CandleDownloader` | ローソク足の一括取得(Lean データ形式) | なし |
 
 ## テスト
 
 ```bash
-dotnet test QuantConnect.BitbankBrokerage.Tests   # 29 tests、ネットワーク不要
+dotnet test QuantConnect.BitbankBrokerage.Tests   # 48 tests、ネットワーク不要
 ```
 
-## 制限事項(v1)
+## 制限事項
 
-- 現物のみ(信用取引 API は未対応)
+- 信用取引: ドテン(反対建玉の決済と新規建てを 1 注文で)は不可(API 制約、分割が必要)。bitbank 固有の `take_profit` / `stop_loss` / `losscut` 注文タイプは未対応。建玉金利はバックテストで未モデル化
 - Second / Tick 解像度の履歴・Quote 履歴は非対応(ライブの板購読は対応)
 - bitbank にはテストネットが無いため、ライブ検証は本番口座 + 最小ロットで行うこと
 

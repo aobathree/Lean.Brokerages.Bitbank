@@ -29,7 +29,7 @@ QuantConnect の Lean エンジンから、日本の暗号資産取引所 **bitb
 
 ### スコープ外(v1)
 
-- 信用取引(margin)— bitbank は margin API を持つが、v1 は現物のみ
+- ~~信用取引(margin)— bitbank は margin API を持つが、v1 は現物のみ~~ → **v1.3(2026-08-09)で対応済み**。`bitbank-account-type: margin` で有効化。`position_side` は反対建玉からの自動判定(買い=ショート決済 or ロング新規、売りは逆)+ `BitbankOrderProperties.PositionSide` での明示指定。建玉は `GET /user/margin/positions` → `GetAccountHoldings()`、`margin_position_update` / `margin_payable_update` / `margin_notice_update` ストリームを処理、`BitbankBrokerageModel` は `AccountType.Margin` でレバレッジ 2 倍 + `SecurityMarginModel`。ドテン(1 注文での決済+新規)は API 制約により拒否。**実機検証済み(2026-08-09、`tools/MarginSmokeTest` で新規建て→建玉照会→決済の全経路合格)**: btc_jpy 信用 taker 手数料は 0.1%/片道で、新規建て時は fill の手数料 0(建玉の unrealized_fee に繰り延べ)・決済 fill に新規+決済分を合算徴収、`profit_loss` は手数料・金利控除後。ストリーム `margin_position_update` は REST と異なる短縮フィールド名(open / locked / unrealized_fee / unrealized_interest)を使う
 - 入出金操作(deposit / withdrawal)
 - bitbank 固有の `take_profit` / `stop_loss` / `losscut` 注文タイプ
 
@@ -327,7 +327,7 @@ Lean の `Config` は環境変数によるオーバーライドに対応して�
 
 いずれの方式でも:
 
-- リポジトリには `config.template.json`(キー空欄)と `.env.1password`(op:// 参照のみ)だけをコミットし、実値を含むファイルは `.gitignore` に登録する
+- リポジトリには `config.template.json`(キー空欄)と `env.1password.sample`(op:// 参照のテンプレート)だけをコミットし、`.env*`(実値やボールト固有の op:// 参照を含む)は `.gitignore` に登録する
 - AWS 側の SSM パラメータは SecureString + 専用 KMS キーで暗号化し、Lean 実行ロール(ECS タスクロール等)にのみ `ssm:GetParameter` / `kms:Decrypt` を許可する
 - ログ・例外メッセージ・`BrokerageMessageEvent` にキーやシークレットを含めない(REST クライアントの署名処理はシークレットをフィールドに保持せず、可能な限り `HMACSHA256` インスタンス生成後に参照を手放す)
 - テスト用と本番用でキーを分離し(§12)、SSM 側もパス階層(`/lean/bitbank/prod/...`, `/lean/bitbank/test/...`)で分ける

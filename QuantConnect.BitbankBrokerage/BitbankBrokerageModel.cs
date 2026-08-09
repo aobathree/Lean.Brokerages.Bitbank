@@ -25,11 +25,18 @@ using QuantConnect.Util;
 namespace QuantConnect.Brokerages.Bitbank
 {
     /// <summary>
-    /// Provides bitbank (bitbank.cc) specific properties. bitbank is a Japanese spot crypto
-    /// exchange offering JPY-quoted pairs only, with a cash account and no order amendment API.
+    /// Provides bitbank (bitbank.cc) specific properties. bitbank is a Japanese crypto
+    /// exchange offering JPY-quoted pairs with no order amendment API. Spot trading uses a
+    /// cash account; margin trading (long/short, max 2x leverage, 0.04%/day position interest)
+    /// is modelled with <see cref="AccountType.Margin"/>.
     /// </summary>
     public class BitbankBrokerageModel : DefaultBrokerageModel
     {
+        /// <summary>
+        /// Maximum bitbank margin leverage (Japanese crypto margin regulation caps individuals at 2x)
+        /// </summary>
+        public const decimal MaxLeverage = 2m;
+
         /// <summary>
         /// Notifies users that order updates are not supported: bitbank has no amend endpoint,
         /// orders must be canceled and re-submitted.
@@ -55,22 +62,19 @@ namespace QuantConnect.Brokerages.Bitbank
         /// <summary>
         /// Initializes a new instance of the <see cref="BitbankBrokerageModel"/> class
         /// </summary>
-        /// <param name="accountType">The type of account to be modelled, defaults to <see cref="AccountType.Cash"/></param>
+        /// <param name="accountType">The type of account to be modelled: <see cref="AccountType.Cash"/>
+        /// for spot (default) or <see cref="AccountType.Margin"/> for margin trading</param>
         public BitbankBrokerageModel(AccountType accountType = AccountType.Cash)
             : base(accountType)
         {
-            if (accountType == AccountType.Margin)
-            {
-                throw new ArgumentException("The bitbank brokerage does not currently support Margin trading.", nameof(accountType));
-            }
         }
 
         /// <summary>
-        /// bitbank global leverage rule: spot cash trading only
+        /// bitbank leverage rule: spot is unleveraged, margin trading allows up to 2x
         /// </summary>
         public override decimal GetLeverage(Security security)
         {
-            return 1m;
+            return AccountType == AccountType.Margin ? MaxLeverage : 1m;
         }
 
         /// <summary>
@@ -144,13 +148,16 @@ namespace QuantConnect.Brokerages.Bitbank
         }
 
         /// <summary>
-        /// Gets a new buying power model for the security; bitbank is cash-account only
+        /// Gets a new buying power model for the security: cash accounts trade spot without
+        /// leverage, margin accounts get 2x leverage and can go short
         /// </summary>
         /// <param name="security">The security to get a buying power model for</param>
         /// <returns>The buying power model for this brokerage/security</returns>
         public override IBuyingPowerModel GetBuyingPowerModel(Security security)
         {
-            return new CashBuyingPowerModel();
+            return AccountType == AccountType.Margin
+                ? new SecurityMarginModel(MaxLeverage)
+                : new CashBuyingPowerModel();
         }
 
         /// <summary>

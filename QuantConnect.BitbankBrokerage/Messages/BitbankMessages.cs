@@ -109,6 +109,9 @@ namespace QuantConnect.Brokerages.Bitbank.Messages
         [JsonProperty("trigger_price")]
         public decimal? TriggerPrice { get; set; }
 
+        [JsonProperty("position_side")]
+        public string PositionSide { get; set; }
+
         [JsonProperty("average_price")]
         public decimal? AveragePrice { get; set; }
 
@@ -152,6 +155,41 @@ namespace QuantConnect.Brokerages.Bitbank.Messages
 
         [JsonProperty("trigger_price", NullValueHandling = NullValueHandling.Ignore)]
         public string TriggerPrice { get; set; }
+
+        [JsonProperty("position_side", NullValueHandling = NullValueHandling.Ignore)]
+        public string PositionSide { get; set; }
+#pragma warning restore 1591
+    }
+
+    /// <summary>
+    /// A single margin position from GET /v1/user/margin/positions.
+    /// Note: this models the REST schema only. The private stream margin_position_update
+    /// message uses different, shortened field names (open, locked, unrealized_fee,
+    /// unrealized_interest) and is not deserialized into this type.
+    /// </summary>
+    public class BitbankMarginPosition
+    {
+#pragma warning disable 1591
+        [JsonProperty("pair")]
+        public string Pair { get; set; }
+
+        [JsonProperty("position_side")]
+        public string PositionSide { get; set; }
+
+        [JsonProperty("open_amount")]
+        public decimal OpenAmount { get; set; }
+
+        [JsonProperty("product")]
+        public decimal? Product { get; set; }
+
+        [JsonProperty("average_price")]
+        public decimal AveragePrice { get; set; }
+
+        [JsonProperty("unrealized_fee_amount")]
+        public decimal? UnrealizedFeeAmount { get; set; }
+
+        [JsonProperty("unrealized_interest_amount")]
+        public decimal? UnrealizedInterestAmount { get; set; }
 #pragma warning restore 1591
     }
 
@@ -190,6 +228,15 @@ namespace QuantConnect.Brokerages.Bitbank.Messages
 
         [JsonProperty("fee_amount_quote")]
         public decimal FeeAmountQuote { get; set; }
+
+        [JsonProperty("position_side")]
+        public string PositionSide { get; set; }
+
+        [JsonProperty("profit_loss")]
+        public decimal? ProfitLoss { get; set; }
+
+        [JsonProperty("interest")]
+        public decimal? Interest { get; set; }
 
         [JsonProperty("executed_at")]
         public long ExecutedAt { get; set; }

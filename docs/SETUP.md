@@ -22,9 +22,10 @@ Lean × bitbank コネクターの API キー設定手順。**キーの実値は
    | 取引(注文の発注・取消) | ✅ 有効 | PlaceOrder / CancelOrder に必要 |
    | **出金** | ❌ **無効** | コネクターは出金 API を一切使わない。キー漏洩時の被害を限定する |
 
-3. 可能であれば **IP アドレス制限**を設定する(自宅/オフィスの固定 IP、AWS は NAT Gateway の EIP)
-4. **テスト用と本番用で別のキーを発行**する(bitbank にはテストネットが無いため、結合テストも本番口座で行う。テスト用キーは事故切り分けと失効運用のために分離する)
-5. 表示された API キーとシークレットをその場で 1Password に保存する(シークレットは再表示不可)
+3. **信用取引を使う場合**: bitbank 側で信用取引の利用審査を完了しておく(未完了だと発注時にエラー 50058)。API キーの「取引」権限で信用注文も発注できる。コネクター側は config `bitbank-account-type: "margin"` で有効化(README「信用取引」節参照)
+4. 可能であれば **IP アドレス制限**を設定する(自宅/オフィスの固定 IP、AWS は NAT Gateway の EIP)
+5. **テスト用と本番用で別のキーを発行**する(bitbank にはテストネットが無いため、結合テストも本番口座で行う。テスト用キーは事故切り分けと失効運用のために分離する)
+6. 表示された API キーとシークレットをその場で 1Password に保存する(シークレットは再表示不可)
 
 ## 2. ローカル: 1Password
 
@@ -57,14 +58,22 @@ op item create --category "API Credential" --vault Private --title bitbank-api-t
 op read "op://Private/bitbank-api-test/api-key"
 ```
 
-### 2.3 `.env.1password`(コミット可能な参照ファイル)
+### 2.3 `.env.1password`(ローカル専用、git 管理外)
 
-本リポジトリの [.env.1password](.env.1password) に **op:// 参照のみ**を記載してある(実値ではないのでコミット可)。Vault / アイテム名を自分の環境に合わせて編集する:
+op:// 参照は実値(シークレット)ではないが、**ボールト名・アイテム ID という環境固有のメタデータを含む**ため、リポジトリにはテンプレート [env.1password.sample](../QuantConnect.BitbankBrokerage/env.1password.sample) のみをコミットする。実ファイルは各マシンでサンプルからコピーして作る(`.env*` は .gitignore 済み):
 
 ```bash
-BITBANK_API_KEY="op://Private/bitbank-api-test/api-key"
-BITBANK_API_SECRET="op://Private/bitbank-api-test/api-secret"
+cp QuantConnect.BitbankBrokerage/env.1password.sample QuantConnect.BitbankBrokerage/.env.1password
 ```
+
+作成した `.env.1password` の op:// 参照を自分の環境に合わせて編集する(アイテム ID は `op item list --vault <vault>`、フィールド ID は `op item get <item> --format json` で確認。API Credential カテゴリのフィールド ID は `username` / `credential`):
+
+```bash
+BITBANK_API_KEY="op://<vault>/<item-id>/username"
+BITBANK_API_SECRET="op://<vault>/<item-id>/credential"
+```
+
+macOS / Windows など複数マシンで作業する場合は、マシンごとにこの手順で作成する(git pull では同期されない・されてはいけない)。
 
 ### 2.4 起動方法
 
@@ -146,7 +155,7 @@ exec dotnet QuantConnect.Lean.Launcher.dll --environment live-bitbank
 ## 4. 運用ルール
 
 - `config.json` の `bitbank-api-key` / `bitbank-api-secret` は**常に空のまま**にする(環境変数フォールバックが働く)
-- 実値を含むファイル(`.env` など)を作った場合は必ず [.gitignore](.gitignore) 対象にする。本リポジトリでは `.env.1password`(op:// 参照のみ)以外の `.env*` を ignore 済み
+- 実値を含むファイル(`.env` など)を作った場合は必ず [.gitignore](../.gitignore) 対象にする。本リポジトリでは `.env*` を**すべて** ignore 済みで、コミット対象はテンプレート `env.1password.sample` のみ(§2.3)
 - キーのローテーション: bitbank で新キー発行 → 1Password / SSM の値を差し替え → プロセス再起動 → 旧キーを bitbank 側で削除
 - ログ・例外にキーが出ないことは実装側で担保済み(署名処理はヘッダー生成時のみシークレットを使用)
 
@@ -171,6 +180,7 @@ op run --env-file=QuantConnect.BitbankBrokerage/.env.1password -- printenv BITBA
 | `tools/AssetsCheck`(パスはリポジトリルートから `QuantConnect.BitbankBrokerage/tools/...`) | 残高・アクティブ注文・private stream 認証情報の取得 | なし(参照のみ) |
 | `tools/StreamCheck` | PubNub プライベートストリームを購読し受信メッセージを表示(既定 60 秒) | なし(参照のみ) |
 | `tools/OrderSmokeTest` | **実注文**の最小ロットライフサイクステスト: post_only 指値買い(市場価格の 50%、約定しない)→ ストリームで確認 → 即取消 | 最小(`--yes` 必須、約 500 円相当の指値が数秒間板に載る) |
+| `tools/MarginSmokeTest` | **信用取引の実注文**テスト: ①position_side=long 付き指値の発注→取消(約定しない)②最小ロット(0.0001 BTC)成行でロング新規建て → `/user/margin/positions` で建玉確認 → 成行決済 → 実現損益・手数料をレポート | 小(`--yes` 必須。②は往復 taker 手数料+スプレッドで数円〜数十円。`--cancel-only` で②をスキップ可。要: 信用取引の利用審査完了) |
 
 ```bash
 # ストリーム受信確認(60 秒監視。実行中に bitbank アプリで注文操作をすると spot_order イベントが流れる)

@@ -27,6 +27,10 @@ namespace QuantConnect.Brokerages.Bitbank
     /// Actual per-pair rates are published by the GET /spot/pairs endpoint
     /// (fields maker_fee_rate_quote / taker_fee_rate_quote); live fills report the exact fee
     /// via the private stream, so this model is an estimate for backtesting and pre-trade checks.
+    /// Margin trading: open/close order fees follow the same standard maker/taker rates
+    /// (per-pair fields margin_open_/margin_close_..._fee_rate_quote). The daily position
+    /// interest (建玉金利, 0.04%/day charged at 00:00 JST) is NOT modelled here; live accounts
+    /// see it reflected in cash balances via Lean's cash sync.
     /// </summary>
     public class BitbankFeeModel : FeeModel
     {

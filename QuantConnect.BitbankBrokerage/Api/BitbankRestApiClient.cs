@@ -112,6 +112,15 @@ namespace QuantConnect.Brokerages.Bitbank.Api
         }
 
         /// <summary>
+        /// GET /v1/user/margin/positions: open margin positions, one entry per pair and side
+        /// </summary>
+        public List<BitbankMarginPosition> GetMarginPositions()
+        {
+            var data = PrivateGet("/v1/user/margin/positions");
+            return data["positions"].ToObject<List<BitbankMarginPosition>>();
+        }
+
+        /// <summary>
         /// GET /v1/user/subscribe: returns the PubNub channel and token for the private stream.
         /// The token has a TTL of 12 hours.
         /// </summary>
@@ -250,12 +259,22 @@ namespace QuantConnect.Brokerages.Bitbank.Api
                 case 40013: return "Invalid order id";
                 case 40020: return "Invalid order price";
                 case 40021: return "Invalid order side";
+                case 40164: return "Invalid position side";
+                case 40165: return "Pair not available for margin trading";
                 case 50009: return "Order not found";
                 case 50010: return "Order cannot be canceled";
                 case 50026: return "Order already canceled";
                 case 50027: return "Order already executed";
-                case 50061: return "Amount exceeds available balance";
-                case 50062: return "Amount exceeds available margin";
+                case 50058: return "Margin trading review has not been completed";
+                case 50059:
+                case 50060: return "New margin orders temporarily restricted, retry later";
+                case 50061: return "Amount exceeds available balance for open order";
+                case 50062: return "Amount exceeds total margin position";
+                case 50078:
+                case 50080: return "Open orders cannot be used in margin trading";
+                case 50079:
+                case 50081: return "Close orders cannot be used in margin trading";
+                case 50083: return "Withdrawals unavailable due to realized loss";
                 case 60001: return "Insufficient funds";
                 case 60002: return "Market order quantity above limit";
                 case 60003: return "Order quantity above limit";

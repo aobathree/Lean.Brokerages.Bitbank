@@ -3,5 +3,4 @@ obj/
 .DS_Store
 .env
 .env.*
-!.env.1password
 Data/crypto/
