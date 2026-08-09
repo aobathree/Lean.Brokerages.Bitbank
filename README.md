@@ -16,11 +16,13 @@ LEAN 本体の改変・再ビルドは不要。公式 NuGet パッケージ / �
 
 ## 必要環境
 
-- .NET SDK 10(DLL のビルドに使用)
+- .NET SDK 10(DLL のビルドに使用。`dotnet --list-sdks` で 10.x があるか確認。無ければ `winget install Microsoft.DotNet.SDK.10`)
 - Docker(公式 LEAN イメージでのバックテスト/ライブ実行に使用)
 - bitbank の API キー(ライブのみ。バックテストは不要)
 
 ## クイックスタート(公式 LEAN イメージでバックテスト)
+
+bash(macOS / Linux / Git Bash)の場合。**Windows PowerShell の場合は[次節](#クイックスタートwindows-powershell)へ。**
 
 ```bash
 git clone https://github.com/aobathree/Lean.Brokerages.Bitbank.git
@@ -58,6 +60,30 @@ docker run --rm \
 ```
 
 最後に `STATISTICS::` ブロック(Total Orders / Net Profit / Total Fees ¥...)が出れば成功です。
+
+## クイックスタート(Windows PowerShell)
+
+ステップ 1)〜2)(`dotnet build` / `dotnet run`)は上と同じです。ステップ 3)〜4)を以下に読み替えます。マージスクリプト(POSIX sh + python3)は LEAN コンテナ内で実行するため、Git Bash や Python のホスト側インストールは不要です。
+
+```powershell
+# 3) 公式イメージの symbol-properties / market-hours に bitbank 行をマージ
+#    (抽出とマージをコンテナ内でまとめて実行)
+docker pull quantconnect/lean:latest
+$base = "$env:TEMP\lean-data"
+New-Item -ItemType Directory -Force "$base\symbol-properties", "$base\market-hours" | Out-Null
+docker run --rm -v "${PWD}:/repo:ro" -v "${base}:/out" --entrypoint /bin/sh quantconnect/lean:latest -c 'cp /Lean/Data/symbol-properties/symbol-properties-database.csv /out/symbol-properties/ && cp /Lean/Data/market-hours/market-hours-database.json /out/market-hours/ && /repo/scripts/install-bitbank-data.sh /out'
+
+# 4) サンプルアルゴリズム(Python、BTC/JPY のゴールデンクロス)をバックテスト
+docker run --rm `
+  -v "${PWD}\QuantConnect.BitbankBrokerage\bin\Debug\net10.0:/plugin:ro" `
+  -v "${base}\symbol-properties\symbol-properties-database.csv:/Lean/Data/symbol-properties/symbol-properties-database.csv:ro" `
+  -v "${base}\market-hours\market-hours-database.json:/Lean/Data/market-hours/market-hours-database.json:ro" `
+  -v "${PWD}\Data\crypto\bitbank:/Lean/Data/crypto/bitbank:ro" `
+  -v "${PWD}\examples:/Algo:ro" `
+  --entrypoint /bin/sh quantconnect/lean:latest -c 'cp /plugin/QuantConnect.BitbankBrokerage.dll /Lean/Launcher/bin/Debug/ && cd /Lean/Launcher/bin/Debug && dotnet QuantConnect.Lean.Launcher.dll --algorithm-type-name BitbankSmaCrossExample --algorithm-language Python --algorithm-location /Algo/bitbank_sma_cross.py'
+```
+
+注意: `scripts/install-bitbank-data.sh` は LF 改行必須です(`.gitattributes` で強制済み)。2026-08 以前にクローンしたリポジトリで `/bin/sh: not found` エラーが出る場合は、`git pull` 後に再クローンするか `git checkout -- scripts/` で改行を正規化してください。
 
 ## アルゴリズムからの使い方
 
