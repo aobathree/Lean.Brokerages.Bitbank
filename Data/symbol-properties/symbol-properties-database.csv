@@ -1,0 +1,45 @@
+market,symbol,type,description,quote_currency,contract_multiplier,minimum_price_variation,lot_size,market_ticker,minimum_order_size,price_magnifier,strike_multiplier
+bitbank,BTCJPY,crypto,Bitcoin-Japanese Yen,JPY,1,1,0.0001,btc_jpy,0.0001
+bitbank,XRPJPY,crypto,XRP-Japanese Yen,JPY,1,0.001,0.0001,xrp_jpy,0.0001
+bitbank,LTCJPY,crypto,Litecoin-Japanese Yen,JPY,1,0.1,0.0001,ltc_jpy,0.0001
+bitbank,ETHJPY,crypto,Ethereum-Japanese Yen,JPY,1,1,0.0001,eth_jpy,0.0001
+bitbank,MONAJPY,crypto,MonaCoin-Japanese Yen,JPY,1,0.001,0.0001,mona_jpy,0.0001
+bitbank,BCCJPY,crypto,Bitcoin Cash-Japanese Yen,JPY,1,1,0.0001,bcc_jpy,0.0001
+bitbank,XLMJPY,crypto,Stellar Lumens-Japanese Yen,JPY,1,0.001,0.0001,xlm_jpy,0.0001
+bitbank,QTUMJPY,crypto,Qtum-Japanese Yen,JPY,1,0.001,0.0001,qtum_jpy,0.0001
+bitbank,BATJPY,crypto,Basic Attention Token-Japanese Yen,JPY,1,0.001,0.0001,bat_jpy,0.0001
+bitbank,OMGJPY,crypto,OMG Network-Japanese Yen,JPY,1,0.001,0.0001,omg_jpy,0.0001
+bitbank,XYMJPY,crypto,Symbol-Japanese Yen,JPY,1,0.001,0.0001,xym_jpy,0.0001
+bitbank,LINKJPY,crypto,Chainlink-Japanese Yen,JPY,1,0.001,0.0001,link_jpy,0.0001
+bitbank,BOBAJPY,crypto,Boba Network-Japanese Yen,JPY,1,0.001,0.0001,boba_jpy,0.0001
+bitbank,ENJJPY,crypto,Enjin Coin-Japanese Yen,JPY,1,0.001,0.0001,enj_jpy,0.0001
+bitbank,POLJPY,crypto,Polygon Ecosystem Token-Japanese Yen,JPY,1,0.001,0.0001,pol_jpy,0.0001
+bitbank,DOTJPY,crypto,Polkadot-Japanese Yen,JPY,1,0.001,0.0001,dot_jpy,0.0001
+bitbank,DOGEJPY,crypto,Dogecoin-Japanese Yen,JPY,1,0.001,0.0001,doge_jpy,0.0001
+bitbank,ASTRJPY,crypto,Astar-Japanese Yen,JPY,1,0.001,0.0001,astr_jpy,0.0001
+bitbank,ADAJPY,crypto,Cardano-Japanese Yen,JPY,1,0.001,0.0001,ada_jpy,0.0001
+bitbank,AVAXJPY,crypto,Avalanche-Japanese Yen,JPY,1,0.001,0.0001,avax_jpy,0.0001
+bitbank,AXSJPY,crypto,Axie Infinity-Japanese Yen,JPY,1,0.001,0.0001,axs_jpy,0.0001
+bitbank,FLRJPY,crypto,Flare-Japanese Yen,JPY,1,0.001,0.0001,flr_jpy,0.0001
+bitbank,SANDJPY,crypto,The Sandbox-Japanese Yen,JPY,1,0.001,0.0001,sand_jpy,0.0001
+bitbank,APEJPY,crypto,ApeCoin-Japanese Yen,JPY,1,0.001,0.0001,ape_jpy,0.0001
+bitbank,GALAJPY,crypto,Gala-Japanese Yen,JPY,1,0.001,0.0001,gala_jpy,0.0001
+bitbank,CHZJPY,crypto,Chiliz-Japanese Yen,JPY,1,0.001,0.0001,chz_jpy,0.0001
+bitbank,OASJPY,crypto,Oasys-Japanese Yen,JPY,1,0.001,0.0001,oas_jpy,0.0001
+bitbank,MANAJPY,crypto,Decentraland-Japanese Yen,JPY,1,0.001,0.0001,mana_jpy,0.0001
+bitbank,GRTJPY,crypto,The Graph-Japanese Yen,JPY,1,0.001,0.0001,grt_jpy,0.0001
+bitbank,RENDERJPY,crypto,Render-Japanese Yen,JPY,1,0.001,0.0001,render_jpy,0.0001
+bitbank,BNBJPY,crypto,Build and Build-Japanese Yen,JPY,1,1,0.0001,bnb_jpy,0.0001
+bitbank,ARBJPY,crypto,Arbitrum-Japanese Yen,JPY,1,0.001,0.0001,arb_jpy,0.0001
+bitbank,OPJPY,crypto,Optimism-Japanese Yen,JPY,1,0.001,0.0001,op_jpy,0.0001
+bitbank,DAIJPY,crypto,Dai-Japanese Yen,JPY,1,0.001,0.0001,dai_jpy,0.0001
+bitbank,KLAYJPY,crypto,Klaytn-Japanese Yen,JPY,1,0.0001,0.0001,klay_jpy,0.0001
+bitbank,IMXJPY,crypto,Immutable-Japanese Yen,JPY,1,0.001,0.0001,imx_jpy,0.0001
+bitbank,MASKJPY,crypto,Mask Network-Japanese Yen,JPY,1,0.001,0.0001,mask_jpy,0.0001
+bitbank,SOLJPY,crypto,Solana-Japanese Yen,JPY,1,0.1,0.0001,sol_jpy,0.0001
+bitbank,CYBERJPY,crypto,Cyber-Japanese Yen,JPY,1,0.01,0.0001,cyber_jpy,0.0001
+bitbank,TRXJPY,crypto,Tron-Japanese Yen,JPY,1,0.0001,0.0001,trx_jpy,0.0001
+bitbank,LPTJPY,crypto,Livepeer-Japanese Yen,JPY,1,0.01,0.0001,lpt_jpy,0.0001
+bitbank,ATOMJPY,crypto,Cosmos-Japanese Yen,JPY,1,0.001,0.0001,atom_jpy,0.0001
+bitbank,SUIJPY,crypto,Sui-Japanese Yen,JPY,1,0.001,0.00000001,sui_jpy,0.0001
+bitbank,SKYJPY,crypto,Sky-Japanese Yen,JPY,1,0.0001,0.00000001,sky_jpy,0.0001

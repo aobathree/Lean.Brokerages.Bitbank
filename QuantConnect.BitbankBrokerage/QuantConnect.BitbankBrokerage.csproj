@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>10</LangVersion>
+    <RootNamespace>QuantConnect.Brokerages.Bitbank</RootNamespace>
+    <AssemblyName>QuantConnect.BitbankBrokerage</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <!-- copy referenced Lean assemblies next to the plugin DLL so the output
+         folder is a complete drop-in package -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="QuantConnect.Brokerages" Version="2.5.17961" />
+    <PackageReference Include="QuantConnect.Common" Version="2.5.17961" />
+    <PackageReference Include="QuantConnect.Configuration" Version="2.5.17961" />
+    <PackageReference Include="QuantConnect.Logging" Version="2.5.17961" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- standalone verification tools live under tools/; keep them out of the connector build -->
+    <Compile Remove="tools/**/*.cs" />
+  </ItemGroup>
+</Project>
