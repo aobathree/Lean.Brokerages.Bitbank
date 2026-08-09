@@ -1,0 +1,5 @@
+# These files are executed / merged inside the Linux LEAN container,
+# so they must stay LF even on Windows checkouts (core.autocrlf=true).
+*.sh text eol=lf
+Data/symbol-properties/*.csv text eol=lf
+Data/market-hours/*.json text eol=lf
