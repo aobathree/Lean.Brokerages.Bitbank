@@ -1,0 +1,12 @@
+<Project>
+  <ItemGroup>
+    <!-- Known vulnerabilities in LEAN's transitive dependencies
+         (QuantConnect.Compression -> DotNetZip 1.16.0 -> System.Drawing.Common 4.7.0).
+         No fixed versions exist upstream; the official LEAN Docker image ships the
+         same assemblies. Neither code path (untrusted zip extraction, image parsing)
+         is reachable from this plugin. Suppressed per-advisory so new advisories
+         still surface as warnings. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-xhg6-9j5j-w4vf" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rxg9-xrhp-64gj" />
+  </ItemGroup>
+</Project>
