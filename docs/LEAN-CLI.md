@@ -4,6 +4,8 @@
 
 README の[クイックスタート](../README.md#クイックスタート公式-lean-イメージでバックテスト)は raw `docker run` で完結する最小構成です。プロジェクト管理・バックテスト結果の保存・ライブ運用まで含めた日常の開発には、この Lean CLI 構成を推奨します。
 
+> **注意: ローカル実行専用です。** 本手順で使えるのは lean CLI の**ローカル実行系コマンド**(`lean backtest` / `lean live deploy` — ローカルの Docker でコンテナが動く)だけです。QuantConnect クラウドで実行する `lean cloud push` / `lean cloud backtest` / `lean cloud live` は、QC 側のサーバーに本プラグイン(DLL・データ定義)を持ち込めないため**動きません**。`lean login`(QuantConnect アカウント)はワークスペース作成とサンプルデータ取得のために使うだけで、実行はすべてローカルで完結します。
+
 ## 仕組み(前提知識)
 
 - Lean CLI はコンテナ起動時に entrypoint を自前のスクリプトで上書きし、イメージ内 `/Lean/Launcher/bin/Debug` のバイナリで LEAN を実行する。カスタムイメージの要件は「このパスに必要な DLL があること」だけなので、**公式イメージにプラグイン DLL を 1 個足せばよい**(LEAN 本体の改変・再ビルドは不要)

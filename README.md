@@ -98,6 +98,8 @@ lean config set engine-image lean-bitbank:cli
 
 ワークスペースへのデータ配置・ライブ運用に必要な CLI パッチなど、完全な手順は [docs/LEAN-CLI.md](docs/LEAN-CLI.md) を参照してください。
 
+> **注意**: 本プラグインは**ローカル実行専用**です(ローカルの Docker でバックテスト/ライブを実行)。QuantConnect クラウド(`lean cloud push` / `lean cloud backtest` / `lean cloud live`)では QC 側サーバーに本プラグインが存在しないため動きません。
+
 ## アルゴリズムからの使い方
 
 Python:
@@ -188,6 +190,7 @@ dotnet test QuantConnect.BitbankBrokerage.Tests   # 48 tests、ネットワー�
 
 ## 制限事項
 
+- **ローカル実行専用**: QuantConnect クラウド(`lean cloud` 系コマンド、quantconnect.com 上でのバックテスト/ライブ)では動作しない。クラウド側にカスタムブローカレッジを持ち込む仕組みが無いため
 - 信用取引: ドテン(反対建玉の決済と新規建てを 1 注文で)は不可(API 制約、分割が必要)。bitbank 固有の `take_profit` / `stop_loss` / `losscut` 注文タイプは未対応。建玉金利はバックテストで未モデル化
 - Second / Tick 解像度の履歴・Quote 履歴は非対応(ライブの板購読は対応)
 - bitbank にはテストネットが無いため、ライブ検証は本番口座 + 最小ロットで行うこと
