@@ -86,6 +86,18 @@ docker run --rm `
 
 注意: `scripts/install-bitbank-data.sh` は LF 改行必須です(`.gitattributes` で強制済み)。2026-08 以前にクローンしたリポジトリで `/bin/sh: not found` エラーが出る場合は、`git pull` 後に再クローンするか `git checkout -- scripts/` で改行を正規化してください。
 
+## Lean CLI での使い方(推奨)
+
+普段 [Lean CLI](https://www.lean.io/docs/v2/lean-cli/key-concepts/getting-started)(`lean` コマンド)で開発している場合は、プラグイン入りカスタムイメージを一度作って `lean config set engine-image lean-bitbank:cli` しておけば、以後は**普段どおり `lean backtest` / `lean live deploy` と打つだけ**で bitbank 対応 LEAN が使えます:
+
+```bash
+dotnet build QuantConnect.BitbankBrokerage
+docker build -f deploy/lean-cli/Dockerfile.cli -t lean-bitbank:cli .
+lean config set engine-image lean-bitbank:cli
+```
+
+ワークスペースへのデータ配置・ライブ運用に必要な CLI パッチなど、完全な手順は [docs/LEAN-CLI.md](docs/LEAN-CLI.md) を参照してください。
+
 ## アルゴリズムからの使い方
 
 Python:

@@ -1,0 +1,5 @@
+# Dockerfile.cli 用のビルドコンテキスト絞り込み(BuildKit が Dockerfile 名で自動選択)
+*
+!QuantConnect.BitbankBrokerage/bin/Debug/net10.0/QuantConnect.BitbankBrokerage.dll
+!Data/
+!scripts/

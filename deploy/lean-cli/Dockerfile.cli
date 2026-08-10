@@ -1,0 +1,21 @@
+# Lean CLI 用カスタムイメージ。公式 quantconnect/lean:latest に
+# bitbank プラグイン DLL とデータ定義をマージする。
+# ビルドコンテキストはリポジトリルート:
+#   dotnet build QuantConnect.BitbankBrokerage
+#   docker build -f deploy/lean-cli/Dockerfile.cli -t lean-bitbank:cli .
+# 使い方は docs/LEAN-CLI.md を参照。
+FROM quantconnect/lean:latest
+
+# プラグイン DLL のみ配置(依存パッケージゼロ。stock LEAN のアセンブリは一切上書きしない)
+COPY QuantConnect.BitbankBrokerage/bin/Debug/net10.0/QuantConnect.BitbankBrokerage.dll /Lean/Launcher/bin/Debug/
+
+# イメージ内の symbol-properties / market-hours へ bitbank 行をマージし、
+# 同梱の日足サンプルデータも配置する(raw `docker run` 用。lean CLI は
+# ワークスペースの data/ を /Lean/Data にマウントするため、ワークスペース側への
+# コピーも必要 — docs/LEAN-CLI.md 手順 4)
+COPY Data /tmp/bitbank/Data
+COPY scripts /tmp/bitbank/scripts
+RUN sh /tmp/bitbank/scripts/install-bitbank-data.sh /Lean/Data \
+    && mkdir -p /Lean/Data/crypto/bitbank \
+    && cp -r /tmp/bitbank/Data/crypto/bitbank/daily /Lean/Data/crypto/bitbank/ \
+    && rm -rf /tmp/bitbank
