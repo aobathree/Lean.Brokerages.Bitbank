@@ -40,7 +40,9 @@ LEAN 本体に埋め込む初期方式(4,837 行追加)で、この独立リポ�
 `lean-bitbank:cli-test` タグで走っていた。
 
 対処は再ビルドだけ。ソース・アルゴリズム・lean CLI はいずれも無関係だった。
-再ビルド後は 2026-08-10 と同じ 19 注文 / Net Profit 59.043% に戻った。
+再ビルド後は 2026-08-10 と同じ 19 注文 / Net Profit 59.043% に戻った(その直後に
+サンプル側のタイムゾーンを直したので、現在の照合基準は **19 注文 /
+Net Profit 63.627%**。下の節を参照)。
 
 ```powershell
 dotnet build QuantConnect.BitbankBrokerage
@@ -55,20 +57,41 @@ docker build -f deploy/lean-cli/Dockerfile.cli -t lean-bitbank:cli .
 で kabuSTATION 側の import が通ったこと。イメージでもエンジンのビルドでも
 lean CLI のバージョンでもなく、bitbank の DLL 固有だと確定できた。
 
-## 既知の課題: ベンチマークが Hour 解像度を要求する
+## サンプルの照合基準と、直した 2 点 (2026-08-14)
 
-`BitbankSmaCrossExample` は `Failed data requests 67%` を出し、`Alpha` / `Beta` /
-`Treynor Ratio` がすべて 0 になる。`set_benchmark(symbol)` はバックテストで解像度が
-Hour 固定の内部購読を作る (`UniverseSelection.AddPendingInternalDataFeeds`) が、
-bitbank は日足しか持たないため必ず失敗する。関数を渡せば購読自体が作られない。
+`examples/bitbank_sma_cross.py` の現在の期待値は **19 注文 / Net Profit 63.627% /
+Alpha 0.035 / Beta 0.479**。イメージやプラグインを変えたときはこれと突き合わせる。
+
+直した内容は 2 つ。どちらも売買ロジックには触れていない。
+
+**ベンチマークは関数で渡す。** `set_benchmark(symbol)` はバックテストで解像度が
+Hour 固定の内部購読を作る(`UniverseSelection.AddPendingInternalDataFeeds`)が、
+bitbank は日足しか持たないため必ず失敗し、`Alpha` / `Beta` / `Treynor Ratio` が
+すべて 0 になっていた。関数を渡せば購読自体が作られない。
 
 ```python
-self.set_benchmark(lambda _: self.securities[self.pair].price)
+self.set_benchmark(lambda _: self.securities[self.btc].price)
 ```
 
-あわせて `set_time_zone` が未設定で、LEAN が `Using a security benchmark of a
-different timezone (UTC) than the algorithm TimeZone (America/New_York)` と警告する。
-JPY 建てを扱うのに既定の New York のままになっている。
+**タイムゾーンを UTC にする。** `Crypto-bitbank-[*]` の market hours は
+`dataTimeZone` / `exchangeTimeZone` とも UTC で 24 時間市場。既定の
+America/New_York のままだとアルゴリズム時刻がバーからずれ、equity curve の
+日次サンプリングが歪む。**この変更で損益が動く**(59.043% → 63.627%)。動くのが
+正しく、24 時間 UTC 市場を NY 時間で刻んでいた歪みが取れた結果。
+
+## `Failed data requests` に quote が並ぶのは仕様
+
+上記の修正後も `btcjpy_quote.zip` の要求が失敗し続ける(62% 程度)。LEAN は Crypto に
+TradeBar と QuoteBar の両方を購読するが、bitbank の公開 API はローソク足しか返さず
+板の履歴を提供しないため quote ファイルは存在しない。`ERROR` は出ず、LEAN は quote が
+無ければ trade の価格を使うので売買結果に影響しない。詳細は `docs/LEAN-CLI.md` 手順 6。
+
+**合成データで埋めない。** 他取引所の価格に為替レートを掛けて quote を作る案は
+2026-08-14 に検討して却下した。借りてくる側(binance のサンプル)も `_trade` で板情報を
+持たず、期間も 2018 年の 5 日分しかなく、USDJPY もサンプルに存在しない。仮に揃っても
+取引所間の価格差は掛け算で埋まらない。`SubscriptionManager.AvailableDataTypes` から
+Quote を外して購読を抑える手もあるが、`SecurityType.Crypto` 全体に効くうえライブでも
+板購読が消えるため採らない。
 
 ## market id
 

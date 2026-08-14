@@ -121,6 +121,32 @@ lean backtest "BitbankSmaCrossExample"
 
 `STATISTICS::` ブロック(Total Orders / Net Profit / Total Fees ¥...)が出れば成功。ここまでで バックテスト環境は完成です。
 
+#### `Failed data requests` に quote が並ぶのは正常
+
+末尾の `DATA USAGE::` に次のような数字が出ますが、異常ではありません。
+
+```
+DATA USAGE:: Failed data requests 5
+DATA USAGE:: Failed data requests percentage 62%
+```
+
+失敗しているのは `crypto/bitbank/daily/btcjpy_quote.zip` です(バックテスト出力の
+`failed-data-requests-*.txt` で確認できます)。LEAN は Crypto に対して TradeBar と
+QuoteBar の**両方**を購読しますが、bitbank の公開 API はローソク足(OHLCV)しか
+返さず板の履歴を提供しないため、quote ファイルは存在しません。
+
+影響はありません。ログに `ERROR` は出ず、LEAN は quote が無ければ trade の価格を
+使います。売買結果も統計も変わりません。
+
+**合成データで埋めないこと。** 他取引所(binance 等)の価格に為替レートを掛けて
+quote を作る案は成立しません。借りてくる側も `_trade` で板情報を持たず、結局
+スプレッドを発明することになります。取引所間の価格差(日本の取引所は数%乖離する)
+も掛け算では埋まりません。指標の見栄えのためにバックテストの土台を崩す取引です。
+
+スプレッドやスリッページをバックテストに織り込みたい場合は、`BitbankFeeModel` と
+LEAN のスリッページモデルで表現してください。板データを持たない取引所を扱う
+プラグインとしては、そちらが正しい設計です。
+
 ### 7. ライブ環境の設定
 
 ワークスペースの `lean.json` の `"environments": {` 直下に以下を挿入:

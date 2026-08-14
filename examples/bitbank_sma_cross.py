@@ -17,6 +17,11 @@ class BitbankSmaCrossExample(QCAlgorithm):
     def initialize(self):
         self.set_start_date(2024, 1, 1)
         self.set_end_date(2026, 8, 1)
+        # Match the exchange: the Crypto-bitbank-[*] market hours entry declares
+        # UTC for both dataTimeZone and exchangeTimeZone, and trades round the
+        # clock. Leaving the default (America/New_York) offsets the algorithm
+        # clock from the bars and skews the daily sampling of the equity curve.
+        self.set_time_zone("UTC")
         self.set_account_currency("JPY")
         self.set_cash(1_000_000)
         # instantiating the model also registers the "bitbank" market (module initializer)
@@ -25,7 +30,13 @@ class BitbankSmaCrossExample(QCAlgorithm):
         self.btc = self.add_crypto("BTCJPY", Resolution.DAILY, "bitbank").symbol
         self.fast = self.sma(self.btc, 20, Resolution.DAILY)
         self.slow = self.sma(self.btc, 60, Resolution.DAILY)
-        self.set_benchmark(self.btc)
+        # Pass a function, not the symbol. set_benchmark(symbol) makes LEAN add an
+        # internal benchmark feed whose resolution is hardcoded to Hour in
+        # backtests (UniverseSelection.AddPendingInternalDataFeeds), and only
+        # daily candles exist here, so every request for the hourly file fails and
+        # Alpha, Beta and the Treynor ratio all come out as zero. A function adds
+        # no subscription and reuses the daily feed already in place.
+        self.set_benchmark(lambda _: self.securities[self.btc].price)
         self.set_warm_up(60, Resolution.DAILY)
 
     def on_data(self, data: Slice):
