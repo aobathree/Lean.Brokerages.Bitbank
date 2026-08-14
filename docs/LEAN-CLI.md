@@ -32,19 +32,25 @@ README の[クイックスタート](../README.md#クイックスタート公式
 - **QuantConnect アカウント**(無料。`lean login` で使用)
 - ライブのみ: bitbank API キーと、安全に注入するための **1Password + op CLI**(推奨。[SETUP.md](SETUP.md) 参照)
 
-### 1. clone・プラグインビルド・イメージビルド
+### 1. clone・プラグインビルド・日足データ取得・イメージビルド
 
 ```bash
 git clone https://github.com/aobathree/Lean.Brokerages.Bitbank.git
 cd Lean.Brokerages.Bitbank
 dotnet build QuantConnect.BitbankBrokerage
+dotnet run --project QuantConnect.BitbankBrokerage/tools/CandleDownloader -- --from 2018
 docker build -f deploy/lean-cli/Dockerfile.cli -t lean-bitbank:cli .
 ```
 
 (PowerShell も同じコマンドで可。パス区切りはそのままで動きます)
 
+- **`CandleDownloader` は省略できません。** 日足 zip は `Data/crypto/` が `.gitignore`
+  されているためリポジトリに含まれず、クローン直後は存在しません。先に取得しないと
+  `docker build` が
+  `cp: cannot stat '/tmp/bitbank/Data/crypto/bitbank/daily': No such file or directory`
+  で失敗します(公開 API なので API キーは不要)
 - ベースの `quantconnect/lean:latest` は初回 pull に時間がかかる(圧縮で数 GB、展開後 40GB 超)
-- イメージには、プラグイン DLL の配置に加えて symbol-properties / market-hours への bitbank 行マージと同梱の日足サンプルデータ配置まで焼き込まれる
+- イメージには、プラグイン DLL の配置に加えて symbol-properties / market-hours への bitbank 行マージと、上で取得した日足データの配置まで焼き込まれる
 
 ### 2. lean CLI ワークスペース作成
 

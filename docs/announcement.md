@@ -12,10 +12,11 @@
 **セットアップ**
 
 ```
-# 1) プラグインをビルドしてカスタムイメージを作る
+# 1) プラグインをビルドし、日足データを取得してカスタムイメージを作る
 git clone https://github.com/aobathree/Lean.Brokerages.Bitbank.git
 cd Lean.Brokerages.Bitbank
 dotnet build QuantConnect.BitbankBrokerage
+dotnet run --project QuantConnect.BitbankBrokerage/tools/CandleDownloader -- --from 2018
 docker build -f deploy/lean-cli/Dockerfile.cli -t lean-bitbank:cli .
 
 # 2) lean CLI ワークスペースを作って設定スクリプトを流す
@@ -23,6 +24,8 @@ mkdir -p ~/bitbank/lean-cli && cd ~/bitbank/lean-cli
 lean init --language python
 python3 ~/Lean.Brokerages.Bitbank/deploy/lean-cli/setup-workspace.py
 ```
+
+1) の `CandleDownloader` は飛ばさないでください。日足 zip はリポジトリに含めていないので、取得前に `docker build` すると `cp: cannot stat '.../Data/crypto/bitbank/daily'` で失敗します。公開 API なので API キーは不要です。
 
 2) の `setup-workspace.py` が、`lean init` では入らないものをまとめて入れます。
 

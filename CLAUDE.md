@@ -100,8 +100,12 @@ bitbank 44 / kabuSTATION 45 / GMOCoin 46 で埋まっている。`Market.Add` �
 
 ## リポジトリ運用
 
-- 日足 zip を**コミットしている**(姉妹の kabuSTATION リポジトリは逆にコミットしない方針。
-  混同しないこと)
+- 日足 zip は**コミットしていない**。`.gitignore` の `Data/crypto/` で除外しており、
+  クローン直後は `Data/crypto/bitbank/daily/` が存在しない。取得は
+  `dotnet run --project QuantConnect.BitbankBrokerage/tools/CandleDownloader -- --from 2018`
+  (公開 API、キー不要)。`Dockerfile.cli` はこの zip を COPY するので、**取得前に
+  `docker build` すると `cp: cannot stat .../daily` で失敗する**。
+  `docs/LEAN-CLI.md` 手順 1 と `README.md` クイックスタート手順 2 に組み込み済み
 - 秘密情報は 1Password。`op run --env-file=QuantConnect.BitbankBrokerage/.env.1password -- <command>`
   で注入し、コミット対象は sample のみ。このリポジトリの `.env.1password` が
   全プロジェクト共通パターンの参照実装

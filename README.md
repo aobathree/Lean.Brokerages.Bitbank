@@ -92,9 +92,12 @@ docker run --rm `
 
 ```bash
 dotnet build QuantConnect.BitbankBrokerage
+dotnet run --project QuantConnect.BitbankBrokerage/tools/CandleDownloader -- --from 2018
 docker build -f deploy/lean-cli/Dockerfile.cli -t lean-bitbank:cli .
 lean config set engine-image lean-bitbank:cli
 ```
+
+`CandleDownloader`(上の 2 行目)は省略できません。日足 zip はリポジトリに含まれないため、先に取得しないと `docker build` が `cp: cannot stat '.../Data/crypto/bitbank/daily'` で失敗します。
 
 ワークスペースへのデータ配置・ライブ運用に必要な CLI パッチなど、完全な手順は [docs/LEAN-CLI.md](docs/LEAN-CLI.md) を参照してください。
 
