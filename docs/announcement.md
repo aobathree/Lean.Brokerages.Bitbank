@@ -23,6 +23,11 @@ docker build -f deploy/lean-cli/Dockerfile.cli -t lean-bitbank:cli .
 mkdir -p ~/bitbank/lean-cli && cd ~/bitbank/lean-cli
 lean init --language python
 python3 ~/Lean.Brokerages.Bitbank/deploy/lean-cli/setup-workspace.py
+
+# 3) (任意) Jupyter で bitbank シンボルを使うなら research 用イメージも作る
+cd ~/Lean.Brokerages.Bitbank
+docker build -f deploy/lean-cli/Dockerfile.research -t lean-bitbank:research .
+lean config set research-image lean-bitbank:research
 ```
 
 1) の `CandleDownloader` は飛ばさないでください。日足 zip はリポジトリに含めていないので、取得前に `docker build` すると `cp: cannot stat '.../Data/crypto/bitbank/daily'` で失敗します。公開 API なので API キーは不要です。
@@ -45,6 +50,7 @@ python3 ~/Lean.Brokerages.Bitbank/deploy/lean-cli/setup-workspace.py
 ・Windows / macOS / Linux(スクリプトは Python です)
 ・Apple Silicon もネイティブ動作(公式イメージが arm64 対応)
 ・⚠️ **ローカル実行専用**です(ローカルの Docker で動かす構成)。QuantConnect クラウド(`lean cloud` 系)ではカスタムブローカレッジを持ち込めないため動きません
+・対応する lean CLI コマンドは **`lean backtest` / `lean live deploy` / `lean research`**(research は上記 3 のイメージが必要。ノートブックでは `market="bitbank"` を使う前に `BitbankBrokerageModel()` を一度呼んでください)。**`lean report` / `lean optimize` は非対応**です — LEAN がバックテスト結果を読み直す処理はプラグインの市場登録が届かない箇所で、本体を改変しない方針では原理的に埋まりません
 
 **そのほか**
 

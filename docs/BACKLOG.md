@@ -11,14 +11,22 @@
 |---|---|---|
 | `lean backtest` | ✅ 動く | 基準値どおり(19 注文 / Net Profit 63.627% / OrderListHash 一致) |
 | `lean live deploy` | ✅ 動く | 2026-08-10 に Windows で実機確認済み |
-| `lean report` | ❌ 失敗 | DLL が `/Lean/Report/bin/Debug` に無い(下記 1) |
-| `lean research` | ❌ bitbank 利用不可 | そもそも別イメージ `quantconnect/research:latest` を使う(下記 2) |
-| `lean optimize` | ❌ 失敗 | **bitbank 無関係**。Apple Silicon 上の stock LEAN の一般問題(下記 3) |
+| `lean report` | ❌ **恒久的に不可**(stock LEAN) | DLL 追加でも直らないことを Windows で実測(下記 1) |
+| `lean research` | ✅ **対応済み** | 2 枚目のイメージ `lean-bitbank:research` で成立を実測(下記 2) |
+| `lean optimize` | ❌ **恒久的に不可**(stock LEAN) | 親プロセスの SID パースで死ぬことを Windows amd64 で実測(下記 3) |
 
-背景: 公式イメージには用途別の bin ディレクトリが 3 つある(`Launcher` / `Report` /
-`Optimizer.Launcher`)。`Dockerfile.cli` は `/Lean/Launcher/bin/Debug/` にしか DLL を
-置いていないため、Launcher 以外の working_dir で動くコマンドではプラグインの
-`[ModuleInitializer]` が走らず、market `bitbank`(= 44)が未登録のままになる。
+背景(2026-08-14 Windows 実測で確定した一般則): `[ModuleInitializer]` は
+「モジュール内の型への**最初のアクセス**」でしか走らない。DLL がロードされるだけでは
+発火しない(Composer の `Assembly.Load` + リフレクション列挙もメンバアクセスではない)。
+したがって
+
+- **アルゴリズム/ノートブックのコードを実行する経路**(backtest 子プロセス / live /
+  research)は、ユーザーコードがプラグインの型に触れるので動く
+- **結果を読むだけの経路**(report / optimize の親プロセス)は型に一切触れないため
+  発火せず、market 44 を解決できない。**DLL をどの bin ディレクトリに置いても直らない**。
+  解は `Common/Market.cs` への焼き込み(= LEAN フォーク)のみで、本リポジトリの方針外
+
+同一機構は kabuSTATION トラック(market 45)でも 2026-08-14 に確認済み。
 
 lean CLI 側の根拠(1.0.227 のソース):
 
@@ -40,14 +48,19 @@ markets lookup. Requested: 44. You can add markets by calling QuantConnect.Marke
 バックテスト結果 JSON 内の注文の SecurityIdentifier をデコードする段階で market 44 を
 解決できず異常終了する。
 
-**対応案(未検証)**: `Dockerfile.cli` に COPY を 1 行足す。
+**対応案は不成立と実測で確定(2026-08-14 Windows)**。`lean-bitbank:cli` に
+`COPY ... /Lean/Report/bin/Debug/` を足したテストイメージで `lean report` を実行した
+ところ、Composer は DLL をロードする(Skipping トレース無し)が `[ModuleInitializer]` は
+発火せず、まったく同じ market 44 エラーで abort した。Report プロセスはプラグインの
+型に触れないため、DLL の配置場所をどう変えても直らない。
 
-```dockerfile
-COPY QuantConnect.BitbankBrokerage/bin/Debug/net10.0/QuantConnect.BitbankBrokerage.dll /Lean/Report/bin/Debug/
-```
+**stock LEAN では対応不可として docs に明記する**(結論)。
 
-Report の Composer が working_dir の DLL を拾って `[ModuleInitializer]` が走れば直る
-見込みだが、**再ビルド後に `lean report` を実行して確認するまで確定ではない**。
+参考(開発者自身の回避策): `aobathree/Lean` の `jp-lean-patches` ブランチは
+`Common/Market.cs` に bitbank 44 / kabustation 45 を焼き込んでおり、そこからビルドした
+エンジンなら DLL 無しでレポートが生成できる。bitbank のバックテストに対して
+`lean report --image lean-cli/engine:jpfork` で exit 0 / report.html 969.9 KB を実測済み。
+コミュニティには案内しない(フォーク前提になり本リポジトリの売りと矛盾するため)。
 
 ## 2. `lean research` 対応(「DLL 1 個」では収まらない)
 
@@ -62,14 +75,25 @@ Report の Composer が working_dir の DLL を拾って `[ModuleInitializer]` �
 
 つまり research 環境では bitbank のシンボルに一切触れない。
 
-**対応案(未検証)**: 2 枚目のカスタムイメージを作る。research イメージも
-`/Lean/{Launcher,Report,Optimizer.Launcher}` の同一レイアウトを持つことは確認済みなので、
-`FROM quantconnect/research:latest` + 既存と同じ COPY 群で成立する見込み。利用者には
-`lean config set research-image lean-bitbank:research` を案内する。
+**対応済み・成立を実測(2026-08-14 Windows)**。`deploy/lean-cli/Dockerfile.research`
+(`FROM quantconnect/research:latest` + DLL 1 個の COPY)を追加し、
+`lean-bitbank:research` をビルド。コンテナ内でヘッドレス検証:
 
-**留意**: 「公式 Docker イメージに DLL を 1 個足すだけ」という売り文句は
-backtest / live deploy の範囲では正確だが、research まで含めると成り立たない。
-対応するかどうかに関わらず、告知・README で対応コマンドの範囲を明示すること(下記 4)。
+```
+AddReference("QuantConnect.BitbankBrokerage")
+from QuantConnect.Brokerages.Bitbank import BitbankBrokerageModel   # ← これだけでは不十分
+model = BitbankBrokerageModel()                                     # ← ここで発火する
+Market.Encode("bitbank")            # → 44
+SecurityIdentifier.Parse("BTCJPY 3EF")  # → 成功
+```
+
+**落とし穴(実測で発見)**: `AddReference` + `import` だけでは market が登録されない
+(`Market.Encode("bitbank")` が None を返す)。pythonnet の import は型オブジェクトの
+取得(リフレクション)であってメンバアクセスではないため。ノートブックでは
+`market="bitbank"` を使う**前に** `BitbankBrokerageModel()` を一度インスタンス化する
+こと。docs のノートブック例に必ずこの 1 行を入れる。
+
+利用者への案内: `lean config set research-image lean-bitbank:research`。
 
 ## 3. `lean optimize` は Apple Silicon では bitbank 以前の問題
 
@@ -86,16 +110,23 @@ rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2
 さらに悪いことに、全子プロセスが死んでも lean CLI は `Successfully optimized` と表示して
 正常終了する(ログには `Result was not reached` / `Got null/empty backtest result`)。
 
-**対応事項**:
+**Windows amd64 で実測済み(2026-08-14)**: ダミーパラメータのグリッド(2 セット)で
+`lean optimize --image lean-bitbank:cli` を実行。結果は
 
-- amd64(Windows / Intel Linux)では子プロセスが起動するため、その先で
-  `/Lean/Optimizer.Launcher/bin/Debug` に DLL が無いことが問題になるかは**未検証**。
-  Windows 機で `lean optimize` を実行して確認する
-- 予防的に `Dockerfile.cli` へ `/Lean/Optimizer.Launcher/bin/Debug/` への COPY も
-  足しておくのは低コスト(Report と同時に)
+- **子バックテストは 2 本とも完走**(Sharpe 0.43 の統計まで出力)。子はアルゴリズムを
+  実行するので `AddReference` 経由で market が登録される
+- その直後、**親の Optimizer.Launcher が結果内の SID `'BTCJPY 3EF'` をパースする段階で
+  market 44 未解決 → Unhandled exception、exit 1**
+
+つまり amd64 では rosetta 問題の先にある本質が report と同一だと確定した。
+親プロセスは型に触れないため、**`/Lean/Optimizer.Launcher/bin/Debug/` への予防的 COPY は
+無意味**(report で実測済みの同一機構)。stock LEAN では対応不可として docs に明記する。
+
 - arm64 の rosetta 問題は本リポジトリでは直せない。upstream(QuantConnect/Lean)の
-  既知 issue か確認し、docs に「Apple Silicon では optimize 不可(LEAN 側の制約)」と
-  記載する
+  既知 issue か確認し、docs に「Apple Silicon では optimize は子プロセス起動段階で不可
+  (LEAN 側の制約)」と記載する
+- 参考: フォークエンジン(`jp-lean-patches`)では optimize が完走する(kabuSTATION
+  トラックで 25 バックテストのスイープ実績、2026-08-14)
 
 ## 4. announcement.md の含意の修正(投稿済み文面の訂正)
 
@@ -107,15 +138,14 @@ rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2
 一通り使える」と受け取るが、実際には `lean research` はローカルコマンドなのに使えない。
 嘘ではなく、誤った含意。
 
-**対応**: 47 行目の直後に対応範囲を 1 行追記する(全面書き直しは不要)。文面は
-上記 1〜3 の対応がどこまで済んだかで変わるため、**修正を先に済ませてから確定させる**。
-
-暫定文案(report / optimize の Dockerfile 修正が済んだ場合):
+**対応**: 47 行目の直後に対応範囲を 1 行追記する(全面書き直しは不要)。
+1〜3 の実測が済んだので文面確定(2026-08-14、announcement.md に反映済み):
 
 ```
-・lean CLI のローカルコマンドのうち対応は backtest / live deploy / report です。research は
-  別イメージ(research-image)を使う仕様のため非対応、optimize は Apple Silicon では LEAN 側の
-  制約で動きません(Windows / Intel は検証中)
+・対応する lean CLI コマンド: lean backtest / lean live deploy / lean research(research は
+  2 枚目のイメージが必要、docs 参照)。lean report / lean optimize は非対応 — LEAN が
+  バックテスト結果を読み直す処理はプラグインの市場登録が届かない箇所で、本体を
+  改変しない方針では原理的に埋まりません
 ```
 
 Discord 投稿済みの文面も同趣旨で追記編集する。

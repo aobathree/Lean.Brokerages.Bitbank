@@ -1,0 +1,19 @@
+# lean research 用カスタムイメージ(lean-bitbank:research)。
+# Jupyter 入りの quantconnect/research をベースに bitbank プラグイン DLL を追加する。
+#
+# lean research は engine-image ではなく research-image を使う(lean CLI の仕様。
+# constants.py の DEFAULT_RESEARCH_IMAGE)ため、lean-bitbank:cli は経路上に存在しない。
+# ノートブック側で AddReference("QuantConnect.BitbankBrokerage") して型に触れると
+# [ModuleInitializer] が "bitbank" market(id 44)を登録し、
+# qb.add_crypto("BTCJPY", market="bitbank") が使えるようになる。
+# (report / optimize と違い、ノートブックはプラグインの型に明示的にアクセスするので
+# この方式が成立する)
+#
+# ビルドコンテキストはリポジトリルート:
+#   dotnet build QuantConnect.BitbankBrokerage
+#   docker build -f deploy/lean-cli/Dockerfile.research -t lean-bitbank:research .
+# 利用者側の設定:
+#   lean config set research-image lean-bitbank:research
+FROM quantconnect/research:latest
+
+COPY QuantConnect.BitbankBrokerage/bin/Debug/net10.0/QuantConnect.BitbankBrokerage.dll /Lean/Launcher/bin/Debug/

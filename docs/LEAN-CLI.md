@@ -225,6 +225,55 @@ op run --env-file=<.env.1password のパス> -- sh -c \
 - 停止してもオープン注文・建玉は bitbank 側にそのまま残ります
 - 初回は `tools/OrderSmokeTest`([SETUP.md](SETUP.md) §6)で疎通確認してからのライブ投入を推奨
 
+### 9. (任意) Jupyter research で bitbank シンボルを使う
+
+`lean research` は `engine-image` ではなく **`research-image`** を使う仕様のため
+(既定 `quantconnect/research:latest`)、手順 1 のイメージは経路上に存在しません。
+research 用のイメージを別途ビルドします:
+
+```bash
+cd <リポジトリ>
+docker build -f deploy/lean-cli/Dockerfile.research -t lean-bitbank:research .
+lean config set research-image lean-bitbank:research
+```
+
+ノートブックでは **`market="bitbank"` を使う前に、プラグインの型を一度実際に使う**
+必要があります:
+
+```python
+from clr import AddReference
+AddReference("QuantConnect.BitbankBrokerage")
+from QuantConnect.Brokerages.Bitbank import BitbankBrokerageModel
+BitbankBrokerageModel()   # ← この行が必須。import だけでは market が登録されない
+
+qb = QuantBook()
+btc = qb.add_crypto("BTCJPY", Resolution.DAILY, "bitbank").symbol
+```
+
+`AddReference` + `import` だけでは市場 `bitbank`(id 44)が登録されません。市場登録は
+`[ModuleInitializer]` が担っており、これは「モジュール内の型への最初のアクセス」で
+走るためです(pythonnet の import は型オブジェクトの取得であってメンバアクセスでは
+ない — 2026-08-14 実測)。
+
+## 対応コマンドの範囲
+
+| コマンド | 対応 | 備考 |
+|---|---|---|
+| `lean backtest` | ✅ | 手順 1〜6 |
+| `lean live deploy` | ✅ | 手順 7〜8 |
+| `lean research` | ✅ | 手順 9(2 枚目のイメージが必要) |
+| `lean report` | ❌ | 下記参照 |
+| `lean optimize` | ❌ | 下記参照(Apple Silicon では LEAN 側の制約でさらに手前で失敗) |
+| `lean cloud *` | ❌ | QC クラウドにプラグインを持ち込めない(冒頭の注意) |
+
+`report` と `optimize`(の親プロセス)は、バックテスト**結果を読み直すだけ**で
+アルゴリズムを実行しません。市場登録を担う `[ModuleInitializer]` は「型への最初の
+アクセス」でしか走らないため、これらのプロセスでは発火せず、結果内の
+SecurityIdentifier(market 44)を解決できずに異常終了します。DLL をどの bin
+ディレクトリに置いても直らないことを実測済みで(2026-08-14)、LEAN 本体の
+`Common/Market.cs` を書き換える以外に解がありません。本プラグインは LEAN 本体を
+改変しない方針のため**非対応**です。詳細は [BACKLOG.md](BACKLOG.md)。
+
 ## 落とし穴まとめ
 
 1. **CLI のデータベース自動更新**: 既定で 1 日 1 回、upstream から market-hours / symbol-properties をダウンロードして workspace の `data/` を上書き → bitbank 定義が消え「Unable to locate exchange hours for Crypto-bitbank-BTCJPY」で落ちる。`lean config set database-update-frequency "-"` で無効化(手順 3)

@@ -93,6 +93,23 @@ TradeBar と QuoteBar の両方を購読するが、bitbank の公開 API はロ
 Quote を外して購読を抑える手もあるが、`SecurityType.Crypto` 全体に効くうえライブでも
 板購読が消えるため採らない。
 
+## lean CLI の対応範囲は「コードを実行する経路」だけ (2026-08-14 実測)
+
+backtest / live / research は ✅、**report / optimize は stock LEAN では恒久的に ❌**。
+`[ModuleInitializer]` は「型への最初のアクセス」でしか走らず、結果 JSON を読むだけの
+プロセス(Report、Optimizer の親)は型に触れないため。**DLL をどの bin に置いても
+直らない**(`/Lean/Report/bin/Debug` への COPY を実測して不成立確定。optimize は
+子バックテスト全成功後に親が SID パースで死ぬのを Windows amd64 で実測)。
+
+research は `lean-bitbank:research`(`Dockerfile.research`)で対応済み。ただし
+**ノートブックは `market="bitbank"` の前に `BitbankBrokerageModel()` を一度呼ぶ**こと。
+pythonnet の import は型オブジェクト取得であってメンバアクセスではないため、
+import だけでは登録されない(`Market.Encode("bitbank")` が None になる)。
+
+開発者自身の回避策: `jp-lean-patches` フォークのエンジンなら report / optimize とも
+動く(bitbank 44 焼き込み済み。`lean report --image lean-cli/engine:jpfork` で実測)。
+コミュニティには案内しない。実測の全記録は `docs/BACKLOG.md`。
+
 ## market id
 
 bitbank 44 / kabuSTATION 45 / GMOCoin 46 で埋まっている。`Market.Add` は識別子の
