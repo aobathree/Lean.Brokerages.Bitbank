@@ -62,6 +62,23 @@ docker run --rm \
 
 最後に `STATISTICS::` ブロック(Total Orders / Net Profit / Total Fees ¥...)が出れば成功です。
 
+### `Total Orders 0` で完走したときは日足データが見えていません
+
+ステップ 2) を飛ばした場合、**エラーは出ずに 0 注文で正常終了します**。`-v $PWD/Data/crypto/bitbank:...` のマウント元が存在しないと、Docker が空ディレクトリを勝手に作ってマウントするためです。次の兆候で判別できます。
+
+```
+JPY: ¥     1000000.00 @       1.00 = ¥1000000
+BTC: ₿           0.00 @       0.00 = ¥0     ← 換算レートが 0.00
+...
+DATA USAGE:: Failed data requests percentage 100%
+```
+
+- **CashBook の BTC 換算レートが `0.00`**(正常なら `@ 5338537.00` のような実勢値)。ログの早い位置に出るので最初の手がかりになります
+- `Failed data requests percentage` が **100%**(正常時も quote 分で 62% 程度は失敗します。理由は [docs/LEAN-CLI.md](docs/LEAN-CLI.md) 手順 6 参照)
+- `Algorithm finished warming up.` が出ないままウォームアップ中に終了する
+
+`ls Data/crypto/bitbank/daily`(zip が 8 個)を確認し、無ければステップ 2) の `CandleDownloader` を実行してください。
+
 ## クイックスタート(Windows PowerShell)
 
 ステップ 1)〜2)(`dotnet build` / `dotnet run`)は上と同じです。ステップ 3)〜4)を以下に読み替えます。マージスクリプト(POSIX sh + python3)は LEAN コンテナ内で実行するため、Git Bash や Python のホスト側インストールは不要です。
@@ -85,6 +102,8 @@ docker run --rm `
 ```
 
 注意: `scripts/install-bitbank-data.sh` は LF 改行必須です(`.gitattributes` で強制済み)。2026-08 以前にクローンしたリポジトリで `/bin/sh: not found` エラーが出る場合は、`git pull` 後に再クローンするか `git checkout -- scripts/` で改行を正規化してください。
+
+`Total Orders 0` で終わった場合は[上記の節](#total-orders-0-で完走したときは日足データが見えていません)を参照してください(PowerShell では `dir Data\crypto\bitbank\daily` で確認)。
 
 ## Lean CLI での使い方(推奨)
 

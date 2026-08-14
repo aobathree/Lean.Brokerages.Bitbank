@@ -127,6 +127,26 @@ lean backtest "BitbankSmaCrossExample"
 
 `STATISTICS::` ブロック(Total Orders / Net Profit / Total Fees ¥...)が出れば成功。ここまでで バックテスト環境は完成です。
 
+#### `Total Orders 0` で完走したときは日足データが見えていません
+
+**エラーも警告も出ないまま 0 注文で正常終了します。** データが 1 件も読めていないケースで、ログの次の 3 点で判別できます。
+
+```
+BTC: ₿           0.00 @       0.00 = ¥0     ← 換算レートが 0.00(正常なら @ 5338537.00 のような実勢値)
+...
+DATA USAGE:: Failed data requests percentage 100%   ← 正常時も quote 分で 62% 程度は失敗する
+```
+
+加えて、正常時に出る `Algorithm finished warming up.` が出ないまま(ウォームアップ中に)終了します。`STATISTICS:: OrderListHash` が `d41d8cd98f00b204e9800998ecf8427e`(空リストの md5)なのも目印です。
+
+**CashBook の BTC 換算レート `0.00`** がログの最も早い位置に出るので、これを最初の手がかりにしてください。
+
+原因は次のいずれかです。
+
+- 手順 4 を実行していない、または `crypto/bitbank/daily` のコピーだけ失敗している → `ls ~/bitbank/lean-cli/data/crypto/bitbank/daily`(zip が 8 個)で確認
+- 手順 3 の `database-update-frequency "-"` を設定し忘れ、CLI の日次更新にデータ定義を上書きされた(落とし穴 1)→ 設定してから手順 4 をやり直す
+- raw `docker run` で試している場合は、`-v <ホストパス>:/Lean/Data/crypto/bitbank` のマウント元が存在しない。**Docker はこのとき空ディレクトリを勝手に作ってマウントするためエラーになりません**(リポジトリ側で `CandleDownloader` 未実行のときに起きる)
+
 #### `Failed data requests` に quote が並ぶのは正常
 
 末尾の `DATA USAGE::` に次のような数字が出ますが、異常ではありません。
