@@ -36,13 +36,14 @@ dotnet build QuantConnect.BitbankBrokerage
 dotnet run --project QuantConnect.BitbankBrokerage/tools/CandleDownloader -- --from 2018
 
 # 3) 公式イメージの symbol-properties / market-hours に bitbank 行をマージ
+#    (抽出とマージをコンテナ内でまとめて実行。--rm なのでコンテナは残らない)
 docker pull quantconnect/lean:latest
 mkdir -p /tmp/lean-data/symbol-properties /tmp/lean-data/market-hours
-C=$(docker create quantconnect/lean:latest)
-docker cp $C:/Lean/Data/symbol-properties/symbol-properties-database.csv /tmp/lean-data/symbol-properties/
-docker cp $C:/Lean/Data/market-hours/market-hours-database.json /tmp/lean-data/market-hours/
-docker rm $C
-scripts/install-bitbank-data.sh /tmp/lean-data
+docker run --rm -v "$PWD:/repo:ro" -v /tmp/lean-data:/out \
+  --entrypoint /bin/sh quantconnect/lean:latest -c \
+  'cp /Lean/Data/symbol-properties/symbol-properties-database.csv /out/symbol-properties/ &&
+   cp /Lean/Data/market-hours/market-hours-database.json /out/market-hours/ &&
+   /repo/scripts/install-bitbank-data.sh /out'
 
 # 4) サンプルアルゴリズム(Python、BTC/JPY のゴールデンクロス)をバックテスト
 docker run --rm \
@@ -61,6 +62,8 @@ docker run --rm \
 ```
 
 最後に `STATISTICS::` ブロック(Total Orders / Net Profit / Total Fees ¥...)が出れば成功です。
+
+マージスクリプト(POSIX sh + python3)はステップ 3) の LEAN コンテナ内で実行するため、**ホスト側に python3 は不要**です。ステップ 3) 4) とも `--rm` なので、コンテナの後片付けも要りません。
 
 ### `Total Orders 0` で完走したときは日足データが見えていません
 
@@ -81,7 +84,7 @@ DATA USAGE:: Failed data requests percentage 100%
 
 ## クイックスタート(Windows PowerShell)
 
-ステップ 1)〜2)(`dotnet build` / `dotnet run`)は上と同じです。ステップ 3)〜4)を以下に読み替えます。マージスクリプト(POSIX sh + python3)は LEAN コンテナ内で実行するため、Git Bash や Python のホスト側インストールは不要です。
+ステップ 1)〜2)(`dotnet build` / `dotnet run`)は上と同じです。ステップ 3)〜4)はパス表記だけが違うので、以下に読み替えます。bash 版と同じくマージはコンテナ内で実行するため、Git Bash や Python のホスト側インストールは不要です。
 
 ```powershell
 # 3) 公式イメージの symbol-properties / market-hours に bitbank 行をマージ
