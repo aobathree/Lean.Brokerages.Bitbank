@@ -30,26 +30,45 @@ LEAN 本体に埋め込む初期方式(4,837 行追加)で、この独立リポ�
 `D:\bitbank\lean-cli` の `backtest.ps1` / `live.ps1` が
 `--image lean-bitbank:cli` を明示指定する。
 
-## 未解決: BitbankBrokerageModel を import できない
+## 解決済み: import 失敗はイメージ内の DLL が古かった (2026-08-14)
 
-2026-08-14 時点で `D:\bitbank\lean-cli` のバックテストが失敗する。
+`cannot import name 'BitbankBrokerageModel' from 'QuantConnect.Brokerages.Bitbank'
+(unknown location)` でバックテストが起動しなかった。原因は **`lean-bitbank:cli` に
+焼かれた DLL が古いまま**だったこと。ソースは 2026-08-09 22:59 の `5fb14fc`
+(信用取引対応) 以降変わっていないのに、イメージ内は 59,392 バイト、現行ソースの
+ビルドは 71,168 バイトだった。当時成功していたバックテストは、いまは存在しない
+`lean-bitbank:cli-test` タグで走っていた。
 
+対処は再ビルドだけ。ソース・アルゴリズム・lean CLI はいずれも無関係だった。
+再ビルド後は 2026-08-10 と同じ 19 注文 / Net Profit 59.043% に戻った。
+
+```powershell
+dotnet build QuantConnect.BitbankBrokerage
+docker build -f deploy/lean-cli/Dockerfile.cli -t lean-bitbank:cli .
 ```
-ERROR:: cannot import name 'BitbankBrokerageModel' from
-        'QuantConnect.Brokerages.Bitbank' (unknown location)
-  at main.py: line 11
+
+**教訓: プラグインを直したら、それを載せた「すべて」のイメージを積み直す。**
+`lean-bitbank:cli` の上に kabuSTATION を重ねた `lean-jp:cli` があるため、
+下段だけ古いと上段も壊れる。この依存関係は自動化されていない。
+
+切り分けの決め手は、同じ `lean-jp:cli` (bitbank と kabuSTATION の DLL が両方入る)
+で kabuSTATION 側の import が通ったこと。イメージでもエンジンのビルドでも
+lean CLI のバージョンでもなく、bitbank の DLL 固有だと確定できた。
+
+## 既知の課題: ベンチマークが Hour 解像度を要求する
+
+`BitbankSmaCrossExample` は `Failed data requests 67%` を出し、`Alpha` / `Beta` /
+`Treynor Ratio` がすべて 0 になる。`set_benchmark(symbol)` はバックテストで解像度が
+Hour 固定の内部購読を作る (`UniverseSelection.AddPendingInternalDataFeeds`) が、
+bitbank は日足しか持たないため必ず失敗する。関数を渡せば購読自体が作られない。
+
+```python
+self.set_benchmark(lambda _: self.securities[self.pair].price)
 ```
 
-切り分け済みの事実:
-
-- `lean-bitbank:cli` でも `lean-jp:cli` でも**同一のエラー**。イメージ選択の問題ではない
-- 両イメージの `QuantConnect.BitbankBrokerage.dll` は同一(59,392 バイト、2026-08-10)
-- `main.py` は**成功していた 2026-08-10 の実行時スナップショットとバイト単位で同一**
-  (当時 19 注文 / Net Profit 59.043% / ERROR なし)
-- `AddReference` は例外を出さず、その次の `from ... import` で型が見つからない
-
-アルゴリズムもイメージも当時のままなので、環境側で何かが変わっている。
-アセンブリのロードか型の公開側を追うのが次の一手。
+あわせて `set_time_zone` が未設定で、LEAN が `Using a security benchmark of a
+different timezone (UTC) than the algorithm TimeZone (America/New_York)` と警告する。
+JPY 建てを扱うのに既定の New York のままになっている。
 
 ## market id
 
